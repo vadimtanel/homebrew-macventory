@@ -14,7 +14,7 @@ Before publication, every run executes mocked updater/publication tests, Ruby sy
 
 ## Permissions and repository configuration
 
-Only the update job requests `contents: write`; unspecified token permissions are disabled. Checkout is the official `actions/checkout`, pinned to the reviewed v4.2.2 commit. The workflow uses the automatic same-repository `GITHUB_TOKEN`; no PAT or additional secret is required. API credentials are never passed to release-asset download URLs.
+Only the update job requests `contents: write`; unspecified token permissions are disabled. Checkout is the official `actions/checkout`, pinned to the reviewed v7.0.1 commit (Node 24). The workflow uses the automatic same-repository `GITHUB_TOKEN`; no PAT or additional secret is required. API credentials are never passed to release-asset download URLs.
 
 Repository settings inspected during setup: Actions enabled; default Workflow permissions set to **Read repository contents and packages permissions**; Actions PR creation disabled. Retain the read-only default: the workflow's explicit job permission requests the necessary scoped write access. There is no need to grant all workflows broad write permissions or enable PR creation for direct updates.
 
