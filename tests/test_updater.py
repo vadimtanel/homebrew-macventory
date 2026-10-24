@@ -214,7 +214,10 @@ class PublicationTests(unittest.TestCase):
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE) for p in (first, second)]
             for p in processes:
                 p.communicate(timeout=30)
-            self.assertEqual(sorted(p.returncode for p in processes), [0, 1])
+            # Identical same-second commits can share a SHA, in which case
+            # both normal pushes succeed while publishing only one commit.
+            self.assertTrue(any(p.returncode == 0 for p in processes))
+            self.assertTrue(all(p.returncode in (0, 1) for p in processes))
             self.assertEqual(self.git(remote, "rev-list", "--count", "main"), "2")
             # A new checkout already at the update must not create another commit.
             third = root / "third"
