@@ -1,0 +1,82 @@
+name: Update Macventory Cask
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macventory-cask-main
+  cancel-in-progress: false
+
+jobs:
+  update:
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-15
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_ANALYTICS: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - name: Check out main
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Test updater and publication race handling
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Verify official release and prepare Cask
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/update_cask.py --verify-current
+
+      - name: Validate Ruby syntax
+        run: ruby -c Casks/macventory.rb
+
+      - name: Refresh Homebrew tooling
+        run: brew update
+
+      - name: Register this checkout as the Tap
+        shell: bash
+        run: |
+          set -euo pipefail
+          tap_path="$(brew --repository)/Library/Taps/vadimtanel/homebrew-macventory"
+          test ! -e "$tap_path"
+          mkdir -p "$(dirname "$tap_path")"
+          ln -s "$GITHUB_WORKSPACE" "$tap_path"
+          brew trust --cask vadimtanel/macventory/macventory
+
+      - name: Load the Cask and verify URL and version
+        run: |
+          brew info --json=v2 --cask vadimtanel/macventory/macventory > "$RUNNER_TEMP/macventory-info.json"
+          python3 scripts/check_cask_info.py "$RUNNER_TEMP/macventory-info.json"
+
+      - name: Homebrew audit
+        env:
+          HOMEBREW_GITHUB_API_TOKEN: ${{ github.token }}
+        run: brew audit --cask --online --arch=arm vadimtanel/macventory/macventory
+
+      - name: Homebrew style
+        run: brew style --cask vadimtanel/macventory/macventory
+
+      - name: Commit and push only the verified Cask update
+        if: steps.release.outputs.changed == 'true'
+        env:
+          CASK_VERSION: ${{ steps.release.outputs.version }}
+        run: bash scripts/publish_cask.sh "$CASK_VERSION"
+
+      - name: Report result
+        env:
+          CASK_VERSION: ${{ steps.release.outputs.version }}
+          CHANGED: ${{ steps.release.outputs.changed }}
+        run: |
+          echo "Validated Macventory $CASK_VERSION; Cask changed: $CHANGED" >> "$GITHUB_STEP_SUMMARY"
