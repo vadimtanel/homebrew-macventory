@@ -54,7 +54,7 @@ Publishing GitHub release notes does not upload a DMG. The generated GitHub sour
 
 The DMG is the updater's required installation asset. ZIP, checksum list and reviewed source archive are also required by the v1.1.0 application release checklist, but are not inputs to Homebrew installation. Missing them must be resolved as part of application release completion. Uploading application-release assets requires the owner's approval; a Tap update does not authorize that upload. The exact candidate provenance and proposed upload command are recorded in [RELEASE-1.1.0.md](RELEASE-1.1.0.md).
 
-A real future-release bot commit can only be confirmed once a newer supported official release exists. A successful unchanged hosted run validates checks and the no-op path, not future-release publication permission.
+The [v1.1.0 updater run](https://github.com/vadimtanel/homebrew-macventory/actions/runs/40571317556) exercised actual discovery, artifact verification, all checks and direct bot publication in commit `ca5b72dab772fa4e248b8e7512114e7b1448b870`. A [repeat hosted run](https://github.com/vadimtanel/homebrew-macventory/actions/runs/40571954801) revalidated the same official artifact, reported `changed: false` and skipped publication. This confirms both publication permission and the unchanged-release path; future releases still require compatible, fully uploaded official artifacts.
 
 ### Disposable v1.1.0 installation checks
 

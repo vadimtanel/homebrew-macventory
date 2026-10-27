@@ -38,11 +38,7 @@ Homebrew is optional. Download the DMG or ZIP from [official GitHub Releases](ht
 
 ## Updating
 
-### v1.1.0 availability
-
-As checked on 27 October 2026, the application [v1.1.0 release](https://github.com/vadimtanel/MacVentory/releases/tag/v1.1.0) is published but has no uploaded assets. The Tap remains pinned to **1.0.0**. Installing or upgrading cannot deliver 1.1.0 until its official ARM64 DMG is uploaded, verified and published to this Tap. See the [release verification and recovery procedure](RELEASE-1.1.0.md).
-
-Once the Tap reports 1.1.0, users with a Homebrew-managed 1.0.0 installation upgrade with:
+To upgrade a Homebrew-managed 1.0.0 installation to 1.1.0 (or a newer verified release available in the Tap):
 
 ```bash
 brew update
@@ -66,6 +62,8 @@ The [automatic updater](.github/workflows/update-cask.yml) checks official stabl
 Synchronization is periodic, not instantaneous. GitHub can delay scheduled jobs and [disable public-repository schedules after 60 days of inactivity](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule). The owner can re-enable the workflow in Actions and select **Update Macventory Cask → Run workflow → main** to check immediately.
 
 Maintainers: see [automation operation and verification](AUTOMATION.md).
+
+The [v1.1.0 verification report](RELEASE-1.1.0.md) records official artifact provenance, checksums and distribution checks.
 
 If an expected update is delayed, run `brew update`, check `brew info` again, then inspect the [updater runs](https://github.com/vadimtanel/homebrew-macventory/actions/workflows/update-cask.yml). A published release with a missing or incomplete DMG cannot pass verification; maintainers must finish the official upload before retrying. The owner can also trigger the workflow manually. Users should wait for a verified Tap update rather than substitute a download URL or checksum.
 
