@@ -1,0 +1,48 @@
+name: Validate Tap
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: macos-15
+    timeout-minutes: 20
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_ANALYTICS: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Updater and publication regressions
+        run: python3 -m unittest discover -s tests -v
+      - name: Ruby syntax
+        run: ruby -c Casks/macventory.rb
+      - name: Refresh Homebrew tooling
+        run: brew update
+      - name: Register checkout as the Tap
+        run: |
+          set -euo pipefail
+          tap_path="$(brew --repository)/Library/Taps/vadimtanel/homebrew-macventory"
+          test ! -e "$tap_path"
+          mkdir -p "$(dirname "$tap_path")"
+          ln -s "$GITHUB_WORKSPACE" "$tap_path"
+          brew trust --cask vadimtanel/macventory/macventory
+      - name: Check pinned Cask metadata
+        run: |
+          brew info --json=v2 --cask vadimtanel/macventory/macventory > "$RUNNER_TEMP/macventory-info.json"
+          python3 scripts/check_cask_info.py "$RUNNER_TEMP/macventory-info.json"
+      - name: Homebrew audit
+        env:
+          HOMEBREW_GITHUB_API_TOKEN: ${{ github.token }}
+        run: brew audit --cask --online --arch=arm vadimtanel/macventory/macventory
+      - name: Homebrew style
+        run: brew style --cask vadimtanel/macventory/macventory

@@ -38,6 +38,12 @@ Homebrew is optional. Download the DMG or ZIP from [official GitHub Releases](ht
 
 ## Updating
 
+### v1.1.0 availability
+
+As checked on 27 October 2026, the application [v1.1.0 release](https://github.com/vadimtanel/MacVentory/releases/tag/v1.1.0) is published but has no uploaded assets. The Tap remains pinned to **1.0.0**. Installing or upgrading cannot deliver 1.1.0 until its official ARM64 DMG is uploaded, verified and published to this Tap. See the [release verification and recovery procedure](RELEASE-1.1.0.md).
+
+Once the Tap reports 1.1.0, users with a Homebrew-managed 1.0.0 installation upgrade with:
+
 ```bash
 brew update
 brew upgrade --cask vadimtanel/macventory/macventory
@@ -45,11 +51,23 @@ brew upgrade --cask vadimtanel/macventory/macventory
 
 `brew update` refreshes Homebrew metadata and Tap definitions; `brew upgrade` installs a newer version when available.
 
+Check the available version and the installed Homebrew version with:
+
+```bash
+brew info --cask vadimtanel/macventory/macventory
+brew list --cask --versions macventory
+brew outdated --cask
+```
+
+`brew info` shows the available version and installed state. `brew list` reports the managed installed version and fails if the Cask is not installed. `brew outdated` lists installed Casks with newer available versions; it does not install them. A manually copied application may have no Homebrew installation record.
+
 The [automatic updater](.github/workflows/update-cask.yml) checks official stable releases approximately every six hours, at minute 17 UTC (`00:17`, `06:17`, `12:17`, `18:17`). It verifies the published ARM64 DMG, checksum, disk-image integrity, app identity/version, architecture and signature, then runs Ruby and Homebrew checks before committing only the version and checksum. Drafts, prereleases and older releases never replace the pinned Cask. Unchanged releases create no commit; failed checks prevent publishing.
 
 Synchronization is periodic, not instantaneous. GitHub can delay scheduled jobs and [disable public-repository schedules after 60 days of inactivity](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule). The owner can re-enable the workflow in Actions and select **Update Macventory Cask → Run workflow → main** to check immediately.
 
 Maintainers: see [automation operation and verification](AUTOMATION.md).
+
+If an expected update is delayed, run `brew update`, check `brew info` again, then inspect the [updater runs](https://github.com/vadimtanel/homebrew-macventory/actions/workflows/update-cask.yml). A published release with a missing or incomplete DMG cannot pass verification; maintainers must finish the official upload before retrying. The owner can also trigger the workflow manually. Users should wait for a verified Tap update rather than substitute a download URL or checksum.
 
 To uninstall the app bundle installed by this Cask:
 

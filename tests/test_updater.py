@@ -66,6 +66,42 @@ class UpdaterTests(unittest.TestCase):
     def test_numeric_version_comparison(self):
         self.assertEqual(u.choose_release(release("1.0.10"), "1.0.9")[0], "1.0.10")
 
+    def test_future_stable_versions_from_110(self):
+        for version in ("1.1.1", "1.2.0", "2.0.0"):
+            with self.subTest(version=version):
+                self.cask.write_text(u.TEMPLATE.format(version="1.1.0", sha256="0" * 64))
+                result, calls = self.invoke(release(version), verify_current=True)
+                self.assertEqual(result["version"], version)
+                self.assertTrue(result["changed"])
+                self.assertEqual(calls, 1)
+                self.assertEqual(u.read_cask(self.cask)[1:], (version, DIGEST))
+                self.assertFalse(self.invoke(release(version), verify_current=True)[0]["changed"])
+
+    def test_future_release_uses_new_checksum_and_never_downgrades(self):
+        self.cask.write_text(u.TEMPLATE.format(version="1.1.0", sha256=DIGEST))
+        payload = b"new-release" + b"koly" + bytes(508)
+        digest = hashlib.sha256(payload).hexdigest()
+        data = release("1.2.0")
+        data["assets"][0].update(size=len(payload), digest="sha256:" + digest)
+        with patch.object(u, "fetch_release", return_value=data), \
+             patch.object(u, "download", side_effect=lambda a, p: p.write_bytes(payload)), \
+             patch.object(u, "inspect_dmg"):
+            self.assertTrue(u.update(self.cask, verify_current=True)["changed"])
+        self.assertEqual(u.read_cask(self.cask)[1:], ("1.2.0", digest))
+        updated = self.cask.read_text()
+        self.assertFalse(self.invoke(release("1.1.1"))[0]["changed"])
+        self.assertEqual(self.cask.read_text(), updated)
+
+    def test_published_110_without_assets_keeps_100(self):
+        data = release("1.1.0")
+        data["assets"] = []
+        with patch.object(u, "fetch_release", return_value=data), \
+             patch.object(u, "download") as download:
+            with self.assertRaisesRegex(ValueError, "Macventory-1.1.0-arm64.dmg"):
+                u.update(self.cask, verify_current=True)
+        download.assert_not_called()
+        self.assertEqual(self.cask.read_text(), self.original)
+
     def test_prerelease_and_draft_ignored(self):
         for flag in ("prerelease", "draft"):
             data = release("1.1.0-beta.1")
@@ -187,6 +223,44 @@ class PublicationTests(unittest.TestCase):
     def git(self, cwd, *args):
         return subprocess.run(["git", "-C", str(cwd), *args], check=True,
                               capture_output=True, text=True).stdout.strip()
+
+    def test_stale_main_and_remote_rejection_cannot_publish(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            remote = root / "origin.git"
+            self.git(root, "init", "--bare", str(remote))
+            checkout = root / "checkout"
+            self.git(root, "clone", str(remote), str(checkout))
+            self.git(checkout, "checkout", "-b", "main")
+            self.git(checkout, "config", "user.name", "Test")
+            self.git(checkout, "config", "user.email", "test@example.com")
+            (checkout / "Casks").mkdir()
+            cask = checkout / "Casks/macventory.rb"
+            cask.write_text(u.TEMPLATE.format(version="1.1.0", sha256="0" * 64))
+            self.git(checkout, "add", ".")
+            self.git(checkout, "commit", "-m", "initial")
+            self.git(checkout, "push", "origin", "main")
+            initial = self.git(checkout, "rev-parse", "HEAD")
+            cask.write_text(u.TEMPLATE.format(version="1.1.1", sha256=DIGEST))
+            # A server-side refusal must leave remote main unchanged.
+            hook = remote / "hooks/pre-receive"
+            hook.write_text("#!/bin/sh\necho 'test publication denied' >&2\nexit 1\n")
+            hook.chmod(0o755)
+            publisher = ROOT / "scripts/publish_cask.sh"
+            result = subprocess.run(["bash", str(publisher), "1.1.1"], cwd=checkout,
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("test publication denied", result.stderr)
+            self.assertEqual(self.git(remote, "rev-parse", "main"), initial)
+            # A retry from a stale local commit is refused before another commit.
+            cask.write_text(u.TEMPLATE.format(version="1.2.0", sha256=DIGEST))
+            local = self.git(checkout, "rev-parse", "HEAD")
+            result = subprocess.run(["bash", str(publisher), "1.2.0"], cwd=checkout,
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("Remote main changed", result.stderr)
+            self.assertEqual(self.git(checkout, "rev-parse", "HEAD"), local)
+            self.assertEqual(self.git(remote, "rev-parse", "main"), initial)
 
     def test_two_stale_publishers_create_at_most_one_remote_commit(self):
         with tempfile.TemporaryDirectory() as directory:

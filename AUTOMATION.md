@@ -10,6 +10,8 @@ The updater accepts only the reviewed Cask template. Only the version and checks
 
 Before publication, every run executes mocked updater/publication tests, Ruby syntax, Homebrew Cask loading and URL/version/checksum consistency, online audit, and style checks. Any failure stops the workflow and appears under its named check in Actions. A failed validation never pushes the candidate; the published working Cask remains unchanged. Temporary runner files are discarded with the runner.
 
+The separate `Validate Tap` workflow (`.github/workflows/validate.yml`) runs on pushes to `main`, pull requests and manual dispatch. It tests the updater and publisher, Ruby syntax, and the pinned Cask's Homebrew metadata, online audit and style. It has read-only repository permissions and never publishes. It does not discover a new release or validate the latest release artifact, so documentation/regression changes can be checked while a new release is missing its assets. Its green result alone does not establish 1.1.0 installation or upgrade support.
+
 `scripts/publish_cask.sh` allows only a changed `Casks/macventory.rb`, verifies the version, fetches remote main again, and refuses a stale checkout. A shared workflow concurrency group serializes runs; Git's normal fast-forward push is the final race guard. No force pushes or history rewriting are used. No-op runs do not commit. The message is `chore: update Macventory cask to v<version>`.
 
 ## Permissions and repository configuration
@@ -43,5 +45,13 @@ python3 scripts/update_cask.py --verify-current
 For a newer release this also prepares the verified Cask locally; it does not commit or push. The workflow performs the subsequent Homebrew checks before publishing. Review local changes before committing manually.
 
 Tests cover initial/same-version no-ops, repeated execution, new stable releases, numeric comparison, prereleases/drafts, invalid tags, missing/duplicate/incomplete DMGs, wrong URLs, empty/oversized/truncated files, checksum mismatches, network/API failures, identity/version/architecture rejection, mount cleanup, unexpected Cask structure, replacement of an existing release's bytes, and concurrent publication against a temporary local bare remote. Future releases use fixtures, never fabricated GitHub Releases or tags.
+
+Explicit fixtures cover transitions from 1.1.0 to 1.1.1, 1.2.0 and 2.0.0, a changed checksum on a subsequent release, refusal to downgrade, and the published 1.1.0 release with zero assets. Publication tests also simulate a server rejecting the push and a stale local checkout; neither may change remote main. The existing updater supports these versions without a version-specific code change.
+
+## Missing or delayed uploads
+
+Publishing GitHub release notes does not upload a DMG. The generated GitHub source-download links also do not replace the reviewed, named source archive. If the required DMG is absent, duplicated, empty, incomplete, or fails byte/app/signature validation, the updater exits unsuccessfully before changing the Cask. Later checks and publication do not run. Complete and verify the official release upload, then dispatch the updater on current `main`; do not edit the Cask to an unverified version or use `sha256 :no_check`.
+
+The DMG is the updater's required installation asset. ZIP, checksum list and reviewed source archive are also required by the v1.1.0 application release checklist, but are not inputs to Homebrew installation. Missing them must be resolved as part of application release completion. Uploading application-release assets requires the owner's approval; a Tap update does not authorize that upload. The exact candidate provenance and proposed upload command are recorded in [RELEASE-1.1.0.md](RELEASE-1.1.0.md).
 
 A real future-release bot commit can only be confirmed once a newer supported official release exists. A successful unchanged hosted run validates checks and the no-op path, not future-release publication permission.
