@@ -45,4 +45,5 @@ jobs:
           HOMEBREW_GITHUB_API_TOKEN: ${{ github.token }}
         run: brew audit --cask --online --arch=arm vadimtanel/macventory/macventory
       - name: Homebrew style
+        if: ${{ !cancelled() }}
         run: brew style --cask vadimtanel/macventory/macventory

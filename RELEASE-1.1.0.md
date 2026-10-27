@@ -63,3 +63,9 @@ The upload command intentionally omits `--clobber`. If an upload partially fails
 5. Remove the dated README availability warning only after verified publication. Record the bot commit and install/upgrade evidence, then remove disposable QA files and mounts.
 
 Until those steps pass, fresh 1.1.0 installation and upgrade remain **blocked**, not verified. Mocked future-version tests and a successful `Validate Tap` run do not substitute for the official release DMG or installation evidence.
+
+## Tap validation evidence
+
+[Validate Tap run 40553415345](https://github.com/vadimtanel/homebrew-macventory/actions/runs/40553415345) passed all 22 mocked tests, Ruby syntax and Homebrew metadata validation. Its online audit downloaded the pinned official 1.0.0 DMG, then failed with `Version '1.0.0' differs from '1.1.0' retrieved by livecheck.` This is an unresolved publication blocker, not a reason to bypass audit or invent a 1.1.0 checksum. The validation workflow subsequently runs style independently so an audit failure does not hide its result.
+
+The live local updater also failed with `Expected exactly one published asset: Macventory-1.1.0-arm64.dmg`; the Cask bytes remained unchanged. Read-only local `brew info` resolved version 1.0.0, its versioned official URL and pinned SHA-256. No managed Macventory installation was present, and `brew outdated --cask` did not list it; that is not evidence of a successful 1.1.0 upgrade. No Macventory application was installed, upgraded, uninstalled or launched during this verification, and the owner's package installations were left untouched.
