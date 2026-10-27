@@ -1,0 +1,110 @@
+name: Verify v1.1.0 installation and upgrade
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    runs-on: macos-15
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [fresh, upgrade]
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_ANALYTICS: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      CHECK_MODE: ${{ matrix.mode }}
+      PREVIOUS_TAP_COMMIT: 2a95a3e3a5465a1b7f8c367a18480b964e7c2a81
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Require the verified v1.1.0 Cask
+        run: |
+          python3 - <<'PY'
+          import sys
+          sys.path.insert(0, 'scripts')
+          from update_cask import CASK, read_cask, require
+          _, version, digest = read_cask(CASK)
+          require(version == '1.1.0', 'Run this release check after v1.1.0 publication')
+          require(digest == '183dd721cdda80de376ce114b080729afac763e33fccb4354045cef576842e36',
+                  'Cask differs from the approved release DMG')
+          PY
+      - name: Refresh Homebrew before registering the test Tap
+        run: brew update
+      - name: Prepare a disposable Tap checkout and application folder
+        run: |
+          set -euo pipefail
+          tap_path="$(brew --repository)/Library/Taps/vadimtanel/homebrew-macventory"
+          test ! -e "$tap_path"
+          mkdir -p "$(dirname "$tap_path")" "$RUNNER_TEMP/macventory-apps"
+          git clone https://github.com/vadimtanel/homebrew-macventory.git "$tap_path"
+          if [[ "$CHECK_MODE" == upgrade ]]; then
+            git -C "$tap_path" switch -C main "$PREVIOUS_TAP_COMMIT"
+          fi
+          brew trust --cask vadimtanel/macventory/macventory
+      - name: Install the previous official v1.0.0 application
+        if: matrix.mode == 'upgrade'
+        run: |
+          set -euo pipefail
+          brew info --json=v2 --cask vadimtanel/macventory/macventory > "$RUNNER_TEMP/before-install.json"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          info = json.loads((Path(os.environ['RUNNER_TEMP']) / 'before-install.json').read_text())['casks'][0]
+          assert info['version'] == '1.0.0', info
+          PY
+          brew install --cask --appdir="$RUNNER_TEMP/macventory-apps" vadimtanel/macventory/macventory
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$RUNNER_TEMP/macventory-apps/Macventory.app/Contents/Info.plist")" = 1.0.0
+      - name: Refresh the Tap and verify the previous install is outdated
+        if: matrix.mode == 'upgrade'
+        run: |
+          set -euo pipefail
+          brew update
+          brew outdated --cask > "$RUNNER_TEMP/before-upgrade.txt"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          lines = (Path(os.environ['RUNNER_TEMP']) / 'before-upgrade.txt').read_text().splitlines()
+          assert any(line.split()[0].split('/')[-1] == 'macventory' for line in lines), lines
+          PY
+      - name: Install or upgrade the published v1.1.0 Cask
+        run: |
+          set -euo pipefail
+          brew info --json=v2 --cask vadimtanel/macventory/macventory > "$RUNNER_TEMP/available.json"
+          python3 scripts/check_cask_info.py "$RUNNER_TEMP/available.json"
+          if [[ "$CHECK_MODE" == upgrade ]]; then
+            brew upgrade --cask --appdir="$RUNNER_TEMP/macventory-apps" vadimtanel/macventory/macventory
+          else
+            brew install --cask --appdir="$RUNNER_TEMP/macventory-apps" vadimtanel/macventory/macventory
+          fi
+      - name: Verify the installed app, Homebrew record and outdated status
+        run: |
+          set -euo pipefail
+          brew info --json=v2 --cask vadimtanel/macventory/macventory > "$RUNNER_TEMP/installed.json"
+          python3 scripts/check_cask_info.py "$RUNNER_TEMP/installed.json"
+          brew list --cask --versions macventory
+          brew outdated --cask > "$RUNNER_TEMP/after-install.txt"
+          python3 - <<'PY'
+          import json, os, plistlib, sys
+          from pathlib import Path
+          sys.path.insert(0, 'scripts')
+          from update_cask import inspect_app
+          temporary = Path(os.environ['RUNNER_TEMP'])
+          app = temporary / 'macventory-apps/Macventory.app'
+          inspect_app(app, '1.1.0')
+          info = plistlib.loads((app / 'Contents/Info.plist').read_bytes())
+          assert info['CFBundleVersion'] == '108', info
+          cask = json.loads((temporary / 'installed.json').read_text())['casks'][0]
+          assert cask['installed'] == '1.1.0', cask
+          lines = (temporary / 'after-install.txt').read_text().splitlines()
+          assert not any(line.split()[0].split('/')[-1] == 'macventory' for line in lines), lines
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as stream:
+              stream.write(f"{os.environ['CHECK_MODE']}: official Macventory 1.1.0/build 108 installed; ARM64, bundle identity, signature, Cask URL/checksum and Homebrew record verified; not outdated. App was never launched.\n")
+          PY
